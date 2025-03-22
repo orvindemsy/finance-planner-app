@@ -1,7 +1,7 @@
 build:
 	docker build . -f ./Dockerfile -t finance-planner --build-arg BUILDPLATFORM=linux/amd64
 
-bash: build
+bash:
 	docker run --rm -it finance-planner bash
 
 rm:

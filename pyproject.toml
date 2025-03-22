@@ -1,15 +1,15 @@
 [tool.poetry]
-name = "personal-finance-odemsy"
-version = "0.1.0"
+# name = "personal-finance-odemsy"
+# version = "0.1.0"
 description = "personal finance tracker by odemsy"
 authors = ["orvindemsy <demsy@gmail.com>"]
 readme = "README.md"
+package-mode = false # poetry not for package, only for dependency management
 
 [tool.poetry.dependencies]
 python = "^3.11"
 pandas = "^2.2.3"
 streamlit = "^1.43.2"
-
 
 [build-system]
 requires = ["poetry-core"]
