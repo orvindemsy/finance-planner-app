@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Budgets - Budget Tracker{% endblock %}
+{% block content %}
+<div class="period-nav">
+    <a href="/budgets?period={{ prev_period_str }}">&laquo; prev</a>
+    <strong>{{ period_str }}</strong>
+    <a href="/budgets?period={{ next_period_str }}">next &raquo;</a>
+</div>
+
+<table>
+    <thead>
+        <tr><th>Category</th><th>Type</th><th>Planned</th><th>Actual</th><th>Delta</th></tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        {% include "_budget_row.html" %}
+    {% else %}
+        <tr><td colspan="5">No categories yet. Add one on the Categories page.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
