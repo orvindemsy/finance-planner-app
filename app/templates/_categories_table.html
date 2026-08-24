@@ -1,0 +1,23 @@
+<div id="categories-table">
+<table>
+    <thead>
+        <tr><th>Name</th><th>Type</th><th>Active</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for c in categories %}
+        <tr>
+            <td>{{ c.name }}</td>
+            <td><span class="badge {{ c.type.value }}">{{ c.type.value }}</span></td>
+            <td>{{ "Yes" if c.is_active else "No" }}</td>
+            <td>
+                <form style="margin:0" hx-post="/categories/{{ c.id }}/toggle" hx-target="#categories-table" hx-swap="outerHTML">
+                    <button type="submit" class="secondary">{{ "Disable" if c.is_active else "Enable" }}</button>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="4">No categories yet.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
