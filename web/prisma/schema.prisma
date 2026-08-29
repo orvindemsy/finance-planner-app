@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  currency     String        // "JPY" | "IDR"
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+
+  @@map("accounts")
+}
+
+model Category {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  type          String         // "income" | "expense" | "savings" | "transfer"
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  transactions  Transaction[]
+  budgets       Budget[]
+  budgetDefaults BudgetDefault[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  date        DateTime
+  amountCents Int      // hundredths of a currency unit, e.g. 123.45 -> 12345
+  direction   String   // "inflow" | "outflow"
+  status      String   @default("finalized") // "finalized" | "pending"
+  categoryId  Int
+  accountId   Int
+  description String?
+  notes       String?
+  source      String?
+  externalRef String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+  account  Account  @relation(fields: [accountId], references: [id])
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([accountId])
+  @@map("transactions")
+}
+
+model Budget {
+  id                 Int      @id @default(autoincrement())
+  categoryId         Int
+  period             DateTime
+  currency           String
+  plannedAmountCents Int
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, period, currency], name: "uq_budget_category_period_currency")
+  @@index([categoryId])
+  @@map("budgets")
+}
+
+model BudgetDefault {
+  id                 Int      @id @default(autoincrement())
+  categoryId         Int
+  currency           String
+  plannedAmountCents Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, currency], name: "uq_budget_default_category_currency")
+  @@index([categoryId])
+  @@map("budget_defaults")
+}
