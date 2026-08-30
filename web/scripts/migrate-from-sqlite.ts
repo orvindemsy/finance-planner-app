@@ -11,14 +11,65 @@ function toCents(decimalStr: string | number): number {
   return Math.round(Number(decimalStr) * 100);
 }
 
+// Minimal row shapes matching the columns actually read below. The source
+// SQLite DB is a fixed, already-finalized schema from the old app, so these
+// are just enough typing to remove `any` without ceremony.
+type SourceAccountRow = {
+  id: number;
+  name: string;
+  currency: string;
+  is_active: number;
+  created_at: string;
+};
+type SourceCategoryRow = {
+  id: number;
+  name: string;
+  type: string;
+  is_active: number;
+  created_at: string;
+};
+type SourceTransactionRow = {
+  id: number;
+  date: string;
+  amount: string | number;
+  direction: string;
+  status: string;
+  category_id: number;
+  account_id: number;
+  description: string | null;
+  notes: string | null;
+  source: string | null;
+  external_ref: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+type SourceBudgetRow = {
+  id: number;
+  category_id: number;
+  period: string;
+  currency: string;
+  planned_amount: string | number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+type SourceBudgetDefaultRow = {
+  id: number;
+  category_id: number;
+  currency: string;
+  planned_amount: string | number;
+  created_at: string;
+  updated_at: string | null;
+};
+
 async function main() {
   const src = new Database(SOURCE_DB, { readonly: true });
 
-  const accounts = src.prepare("SELECT * FROM accounts").all() as any[];
-  const categories = src.prepare("SELECT * FROM categories").all() as any[];
-  const transactions = src.prepare("SELECT * FROM transactions").all() as any[];
-  const budgets = src.prepare("SELECT * FROM budgets").all() as any[];
-  const budgetDefaults = src.prepare("SELECT * FROM budget_defaults").all() as any[];
+  const accounts = src.prepare("SELECT * FROM accounts").all() as SourceAccountRow[];
+  const categories = src.prepare("SELECT * FROM categories").all() as SourceCategoryRow[];
+  const transactions = src.prepare("SELECT * FROM transactions").all() as SourceTransactionRow[];
+  const budgets = src.prepare("SELECT * FROM budgets").all() as SourceBudgetRow[];
+  const budgetDefaults = src.prepare("SELECT * FROM budget_defaults").all() as SourceBudgetDefaultRow[];
 
   console.log(
     `Source: ${accounts.length} accounts, ${categories.length} categories, ` +

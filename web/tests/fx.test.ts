@@ -11,10 +11,10 @@ describe("getUsdRates", () => {
   });
 
   it("returns jpy/idr rates from a successful fetch", async () => {
-    (fetch as any).mockResolvedValue({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ rates: { JPY: 149.5, IDR: 15800 } }),
-    });
+    } as unknown as Response);
     const { getUsdRates } = await import("../src/lib/fx");
     const result = await getUsdRates();
     expect(result.jpy).toBe(149.5);
@@ -24,7 +24,7 @@ describe("getUsdRates", () => {
   });
 
   it("returns an error and null rates when the fetch fails and no cache exists", async () => {
-    (fetch as any).mockRejectedValue(new Error("network down"));
+    vi.mocked(fetch).mockRejectedValue(new Error("network down"));
     const { getUsdRates } = await import("../src/lib/fx");
     const result = await getUsdRates();
     expect(result.jpy).toBeNull();
@@ -33,8 +33,8 @@ describe("getUsdRates", () => {
   });
 
   it("keeps stale cached rates if a later fetch fails", async () => {
-    (fetch as any)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ rates: { JPY: 150, IDR: 15900 } }) })
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rates: { JPY: 150, IDR: 15900 } }) } as unknown as Response)
       .mockRejectedValueOnce(new Error("timeout"));
     const { getUsdRates } = await import("../src/lib/fx");
     const first = await getUsdRates();
