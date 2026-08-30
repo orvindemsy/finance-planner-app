@@ -22,19 +22,21 @@ export default async function Page({
 }) {
   const params = await searchParams;
   const currency = params.currency ?? DEFAULT_CURRENCY;
-  const period = parsePeriod(params.period);
-  const periodStr = `${period.getFullYear()}-${String(period.getMonth() + 1).padStart(2, "0")}`;
+  const requestedPeriod = parsePeriod(params.period);
+  const periodStr = `${requestedPeriod.getUTCFullYear()}-${String(requestedPeriod.getUTCMonth() + 1).padStart(2, "0")}`;
 
-  const [balances, months, breakdown, periodTotals, recent, fx] = await Promise.all([
+  const months = await getAvailableMonths(currency);
+  const currentMonth = months.includes(periodStr) ? periodStr : (months[months.length - 1] ?? periodStr);
+  const period = parsePeriod(currentMonth);
+
+  const [balances, breakdown, periodTotals, recent, fx] = await Promise.all([
     getBalancesByCurrency(),
-    getAvailableMonths(currency),
     getCategoryBreakdown(period, currency),
     getPeriodTotals(period, currency),
     getRecentTransactions(currency, 10),
     getUsdRates(),
   ]);
 
-  const currentMonth = months.includes(periodStr) ? periodStr : (months[months.length - 1] ?? periodStr);
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
 
   return (
@@ -60,9 +62,12 @@ export default async function Page({
         />
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3">
         <FxRateCard label="USD/JPY" value={fx.jpy} symbol="¥" />
         <FxRateCard label="USD/IDR" value={fx.idr} symbol="Rp" />
+        {fx.fetchedAt !== null && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">as of {fx.fetchedAt}</span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

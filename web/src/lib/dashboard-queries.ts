@@ -4,7 +4,8 @@ import { periodBounds, shiftPeriod } from "./period";
 const CENTS = 100;
 
 function actualForType(type: string, netCents: number): number {
-  return type === "income" ? netCents : -netCents;
+  const result = type === "income" ? netCents : -netCents;
+  return result || 0; // normalize -0 to 0
 }
 
 export async function getBalancesByCurrency(): Promise<Record<string, number>> {
@@ -32,10 +33,10 @@ export async function getAvailableMonths(currency: string): Promise<string[]> {
   const last = bounds._max.date ?? now;
 
   const months: string[] = [];
-  let cursor = new Date(first.getFullYear(), first.getMonth(), 1);
-  const end = new Date(last.getFullYear(), last.getMonth(), 1);
+  let cursor = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), 1));
   while (cursor <= end) {
-    months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+    months.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`);
     cursor = shiftPeriod(cursor, 1);
   }
   return months;
