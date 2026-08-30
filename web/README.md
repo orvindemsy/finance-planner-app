@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Budget Tracker — Web (Next.js)
 
-## Getting Started
+Next.js/Prisma rewrite of the budget-tracker dashboard. This directory is a
+standalone Next.js app; see the repo root README for the overall project
+scope.
 
-First, run the development server:
+## Setup
+
+```bash
+npm install
+```
+
+## Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tests
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test
+```
 
-## Learn More
+## Database
 
-To learn more about Next.js, take a look at the following resources:
+- `npm run db:migrate` — applies Prisma migrations to the local SQLite DB
+  (`prisma/dev.db`).
+- `npm run db:migrate-data` — a **one-off** script that imports data from the
+  old app's SQLite DB (`../data/budget.db`) into this app's Prisma-managed
+  DB. It is **not idempotent**: it creates rows with explicit ids inside a
+  single transaction, so running it a second time against an already-populated
+  database will fail (unique/id conflicts) and cleanly roll back — but you
+  must reset the destination DB first if you need to re-run it:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+  ```bash
+  npx prisma migrate reset --force
+  npm run db:migrate-data
+  ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Lint
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+```
