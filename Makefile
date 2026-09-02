@@ -30,3 +30,12 @@ dev:
 
 run:
 	docker run --rm -it -p 8000:8000 -v $(PWD)/data:/app/data finance-planner
+
+build-web-amd:
+	docker build ./web -f ./web/Dockerfile -t finance-planner-web --build-arg BUILDPLATFORM=linux/amd64
+
+build-web-arm:
+	docker build ./web -f ./web/Dockerfile -t finance-planner-web --build-arg BUILDPLATFORM=linux/arm64
+
+run-web:
+	docker run --rm -it -p 3000:3000 -v $(PWD)/web/prisma:/app/prisma finance-planner-web

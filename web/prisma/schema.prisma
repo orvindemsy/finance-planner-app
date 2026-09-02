@@ -8,12 +8,13 @@ datasource db {
 }
 
 model Account {
-  id           Int           @id @default(autoincrement())
-  name         String        @unique
-  currency     String        // "JPY" | "IDR"
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  transactions Transaction[]
+  id                   Int           @id @default(autoincrement())
+  name                 String        @unique
+  currency             String        // "JPY" | "IDR"
+  startingBalanceCents Int           @default(0)
+  isActive             Boolean       @default(true)
+  createdAt            DateTime      @default(now())
+  transactions         Transaction[]
 
   @@map("accounts")
 }

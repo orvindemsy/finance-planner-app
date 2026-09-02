@@ -16,7 +16,8 @@ export async function getBalancesByCurrency(): Promise<Record<string, number>> {
       (sum, t) => sum + (t.direction === "inflow" ? t.amountCents : -t.amountCents),
       0
     );
-    totals[account.currency] = (totals[account.currency] ?? 0) + netCents / CENTS;
+    const accountCents = account.startingBalanceCents + netCents;
+    totals[account.currency] = (totals[account.currency] ?? 0) + accountCents / CENTS;
   }
   return totals;
 }
@@ -56,7 +57,7 @@ export async function getEffectivePlannedByCategory(
   return planned;
 }
 
-export type BreakdownRow = { name: string; actual: number; budget: number };
+export type BreakdownRow = { categoryId: number; name: string; actual: number; budget: number };
 
 export async function getCategoryBreakdown(
   period: Date,
@@ -81,6 +82,7 @@ export async function getCategoryBreakdown(
       0
     );
     return {
+      categoryId: c.id,
       name: c.name,
       type: c.type,
       actual: actualForType(c.type, netCents / CENTS),
@@ -89,9 +91,27 @@ export async function getCategoryBreakdown(
   });
 
   return {
-    expense: rows.filter((r) => r.type === "expense").map(({ name, actual, budget }) => ({ name, actual, budget })),
-    income: rows.filter((r) => r.type === "income").map(({ name, actual, budget }) => ({ name, actual, budget })),
+    expense: rows
+      .filter((r) => r.type === "expense")
+      .map(({ categoryId, name, actual, budget }) => ({ categoryId, name, actual, budget })),
+    income: rows
+      .filter((r) => r.type === "income")
+      .map(({ categoryId, name, actual, budget }) => ({ categoryId, name, actual, budget })),
   };
+}
+
+export async function setBudgetForCategory(
+  categoryId: number,
+  period: Date,
+  currency: string,
+  amount: number
+): Promise<void> {
+  const plannedAmountCents = Math.round(amount * CENTS);
+  await prisma.budget.upsert({
+    where: { uq_budget_category_period_currency: { categoryId, period, currency } },
+    update: { plannedAmountCents },
+    create: { categoryId, period, currency, plannedAmountCents },
+  });
 }
 
 export async function getPeriodTotals(period: Date, currency: string): Promise<{ income: number; expense: number }> {

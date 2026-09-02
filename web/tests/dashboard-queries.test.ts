@@ -7,6 +7,7 @@ import {
   getCategoryBreakdown,
   getPeriodTotals,
   getRecentTransactions,
+  setBudgetForCategory,
 } from "../src/lib/dashboard-queries";
 
 // All dates here are seeded with Date.UTC(...) to match how the real
@@ -56,6 +57,22 @@ describe("getBalancesByCurrency", () => {
     // Baseline JPY balance (295000) minus the 1000 savings outflow.
     expect(balances.JPY).toBeCloseTo(300000 - 5000 - 1000, 5);
   });
+
+  it("adds each account's starting balance on top of its transaction total", async () => {
+    await seed();
+    await prisma.account.update({
+      where: { name: "JPY Wallet" },
+      data: { startingBalanceCents: 100_000_00 },
+    });
+    await prisma.account.update({
+      where: { name: "IDR Wallet" },
+      data: { startingBalanceCents: 5_000_000_00 },
+    });
+
+    const balances = await getBalancesByCurrency();
+    expect(balances.JPY).toBeCloseTo(100000 + 300000 - 5000, 5);
+    expect(balances.IDR).toBeCloseTo(5000000 + 2000000, 5);
+  });
 });
 
 describe("getAvailableMonths", () => {
@@ -85,10 +102,10 @@ describe("getEffectivePlannedByCategory", () => {
 
 describe("getCategoryBreakdown", () => {
   it("splits actual/budget by category type for the given period", async () => {
-    await seed();
+    const { groceries, salary } = await seed();
     const { expense, income } = await getCategoryBreakdown(new Date(Date.UTC(2026, 2, 1)), "JPY");
-    expect(expense).toEqual([{ name: "Groceries", actual: 5000, budget: 6000 }]);
-    expect(income).toEqual([{ name: "Salary", actual: 300000, budget: 0 }]);
+    expect(expense).toEqual([{ categoryId: groceries.id, name: "Groceries", actual: 5000, budget: 6000 }]);
+    expect(income).toEqual([{ categoryId: salary.id, name: "Salary", actual: 300000, budget: 0 }]);
   });
 
   it("includes a transaction dated on the last day of the month (UTC boundary)", async () => {
@@ -101,12 +118,12 @@ describe("getCategoryBreakdown", () => {
 
     const { expense } = await getCategoryBreakdown(new Date(Date.UTC(2026, 2, 1)), "JPY");
     // Baseline Groceries actual (5000) plus the new last-day transaction (1234).
-    expect(expense).toEqual([{ name: "Groceries", actual: 5000 + 1234, budget: 6000 }]);
+    expect(expense).toEqual([{ categoryId: groceries.id, name: "Groceries", actual: 5000 + 1234, budget: 6000 }]);
 
     // And it must NOT appear in April's breakdown (April has no transactions;
     // the BudgetDefault of 6000 still applies since it's period-independent).
     const april = await getCategoryBreakdown(new Date(Date.UTC(2026, 3, 1)), "JPY");
-    expect(april.expense).toEqual([{ name: "Groceries", actual: 0, budget: 6000 }]);
+    expect(april.expense).toEqual([{ categoryId: groceries.id, name: "Groceries", actual: 0, budget: 6000 }]);
   });
 });
 
@@ -126,5 +143,44 @@ describe("getRecentTransactions", () => {
     expect(recent).toHaveLength(2);
     expect(recent[0].categoryName).toBe("Groceries"); // 2026-03-10, most recent
     expect(recent[1].categoryName).toBe("Salary"); // 2026-03-05
+  });
+});
+
+describe("setBudgetForCategory", () => {
+  it("creates a period-specific Budget row when none exists yet", async () => {
+    const { groceries } = await seed();
+    const period = new Date(Date.UTC(2026, 2, 1));
+
+    await setBudgetForCategory(groceries.id, period, "JPY", 7000);
+
+    const planned = await getEffectivePlannedByCategory(period, "JPY");
+    expect(planned[groceries.id]).toBeCloseTo(7000, 5);
+  });
+
+  it("updates the existing Budget row for that category/period/currency instead of duplicating it", async () => {
+    const { groceries } = await seed();
+    const period = new Date(Date.UTC(2026, 2, 1));
+
+    await setBudgetForCategory(groceries.id, period, "JPY", 7000);
+    await setBudgetForCategory(groceries.id, period, "JPY", 8500);
+
+    const planned = await getEffectivePlannedByCategory(period, "JPY");
+    expect(planned[groceries.id]).toBeCloseTo(8500, 5);
+
+    const rows = await prisma.budget.findMany({ where: { categoryId: groceries.id, currency: "JPY" } });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("only affects the given period, leaving other months' effective budget (the BudgetDefault) alone", async () => {
+    const { groceries } = await seed();
+    const march = new Date(Date.UTC(2026, 2, 1));
+    const april = new Date(Date.UTC(2026, 3, 1));
+
+    await setBudgetForCategory(groceries.id, march, "JPY", 9000);
+
+    const marchPlanned = await getEffectivePlannedByCategory(march, "JPY");
+    const aprilPlanned = await getEffectivePlannedByCategory(april, "JPY");
+    expect(marchPlanned[groceries.id]).toBeCloseTo(9000, 5);
+    expect(aprilPlanned[groceries.id]).toBeCloseTo(6000, 5); // seed()'s BudgetDefault, untouched
   });
 });

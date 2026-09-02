@@ -45,3 +45,17 @@ npm test
 ```bash
 npm run lint
 ```
+
+## Run with Docker
+
+From the repo root:
+
+```bash
+make build-web-arm   # or build-web-amd on x86_64
+make run-web
+```
+
+Then open [http://localhost:3000](http://localhost:3000). The container
+mounts `./web/prisma` as a volume, so it reads/writes the same `dev.db` you
+use locally — apply new migrations with `npm run db:migrate` on the host
+before restarting the container; the image doesn't run migrations itself.
