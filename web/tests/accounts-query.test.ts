@@ -3,6 +3,7 @@ import { prisma } from "../src/lib/prisma";
 import {
   getAllAccounts,
   updateAccountStartingBalance,
+  updateAccountNote,
   createAccount,
   deactivateAccount,
 } from "../src/lib/accounts-query";
@@ -34,6 +35,36 @@ describe("getAllAccounts", () => {
     });
   });
 
+  it("excludes pending transactions from the current balance", async () => {
+    const cash = await prisma.account.create({ data: { name: "Cash", currency: "JPY", startingBalanceCents: 10000000 } });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 1)),
+        amountCents: 50000,
+        direction: "outflow",
+        status: "finalized",
+        categoryId: category.id,
+        accountId: cash.id,
+      },
+    });
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 2)),
+        amountCents: 999900,
+        direction: "inflow",
+        status: "pending",
+        categoryId: category.id,
+        accountId: cash.id,
+      },
+    });
+
+    const [account] = await getAllAccounts();
+    // Unchanged from the finalized-only baseline — the pending inflow must not count.
+    expect(account.currentBalance).toBe(100000 - 500);
+  });
+
   it("defaults starting balance to 0 when never set", async () => {
     await prisma.account.create({ data: { name: "Fresh Account", currency: "JPY" } });
 
@@ -60,6 +91,26 @@ describe("updateAccountStartingBalance", () => {
 
     const [row] = await getAllAccounts();
     expect(row.startingBalance).toBe(-30000);
+  });
+});
+
+describe("updateAccountNote", () => {
+  it("sets a free-text note on the account", async () => {
+    const account = await prisma.account.create({ data: { name: "Yucho Transfer", currency: "JPY" } });
+
+    await updateAccountNote(account.id, "Combined with Debit Yucho, Dec 2025 CSV anchor");
+
+    const [row] = await getAllAccounts();
+    expect(row.note).toBe("Combined with Debit Yucho, Dec 2025 CSV anchor");
+  });
+
+  it("clears the note when set to null", async () => {
+    const account = await prisma.account.create({ data: { name: "Cash", currency: "JPY", note: "temp" } });
+
+    await updateAccountNote(account.id, null);
+
+    const [row] = await getAllAccounts();
+    expect(row.note).toBeNull();
   });
 });
 

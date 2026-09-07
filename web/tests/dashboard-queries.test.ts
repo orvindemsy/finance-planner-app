@@ -38,7 +38,7 @@ async function seed() {
 describe("getBalancesByCurrency", () => {
   it("sums signed amounts per account currency across all time", async () => {
     await seed();
-    const balances = await getBalancesByCurrency();
+    const balances = await getBalancesByCurrency(new Date(Date.UTC(2026, 2, 1)));
     expect(balances.JPY).toBeCloseTo(300000 - 5000, 5); // 3,000.00 - 50.00
     expect(balances.IDR).toBeCloseTo(2000000, 5);
   });
@@ -53,7 +53,7 @@ describe("getBalancesByCurrency", () => {
       data: { date: new Date(Date.UTC(2026, 2, 15)), amountCents: 100000, direction: "outflow", categoryId: savings.id, accountId: jpyAccount.id },
     });
 
-    const balances = await getBalancesByCurrency();
+    const balances = await getBalancesByCurrency(new Date(Date.UTC(2026, 2, 1)));
     // Baseline JPY balance (295000) minus the 1000 savings outflow.
     expect(balances.JPY).toBeCloseTo(300000 - 5000 - 1000, 5);
   });
@@ -69,9 +69,42 @@ describe("getBalancesByCurrency", () => {
       data: { startingBalanceCents: 5_000_000_00 },
     });
 
-    const balances = await getBalancesByCurrency();
+    const balances = await getBalancesByCurrency(new Date(Date.UTC(2026, 2, 1)));
     expect(balances.JPY).toBeCloseTo(100000 + 300000 - 5000, 5);
     expect(balances.IDR).toBeCloseTo(5000000 + 2000000, 5);
+  });
+
+  it("excludes pending transactions from the balance (they haven't settled yet)", async () => {
+    const { jpyAccount, salary } = await seed();
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 2, 20)),
+        amountCents: 999900,
+        direction: "inflow",
+        status: "pending",
+        categoryId: salary.id,
+        accountId: jpyAccount.id,
+      },
+    });
+
+    const balances = await getBalancesByCurrency(new Date(Date.UTC(2026, 2, 1)));
+    // Unchanged from the finalized-only baseline — the pending inflow must not count.
+    expect(balances.JPY).toBeCloseTo(300000 - 5000, 5);
+  });
+
+  it("only counts transactions on or before the end of the given period, not today's full history", async () => {
+    const { jpyAccount, groceries } = await seed();
+    // A transaction dated the month AFTER the requested period must not count —
+    // selecting an earlier month should show what the account held back then.
+    await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 3, 1)), amountCents: 700000, direction: "outflow", categoryId: groceries.id, accountId: jpyAccount.id },
+    });
+
+    const marchBalances = await getBalancesByCurrency(new Date(Date.UTC(2026, 2, 1)));
+    expect(marchBalances.JPY).toBeCloseTo(300000 - 5000, 5); // April's outflow excluded
+
+    const aprilBalances = await getBalancesByCurrency(new Date(Date.UTC(2026, 3, 1)));
+    expect(aprilBalances.JPY).toBeCloseTo(300000 - 5000 - 7000, 5); // now included
   });
 });
 
@@ -125,11 +158,57 @@ describe("getCategoryBreakdown", () => {
     const april = await getCategoryBreakdown(new Date(Date.UTC(2026, 3, 1)), "JPY");
     expect(april.expense).toEqual([{ categoryId: groceries.id, name: "Groceries", actual: 0, budget: 6000 }]);
   });
+
+  it("excludes pending transactions from the actual total", async () => {
+    const { jpyAccount, groceries } = await seed();
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 2, 12)),
+        amountCents: 500000,
+        direction: "outflow",
+        status: "pending",
+        categoryId: groceries.id,
+        accountId: jpyAccount.id,
+      },
+    });
+
+    const { expense } = await getCategoryBreakdown(new Date(Date.UTC(2026, 2, 1)), "JPY");
+    // Unchanged from the finalized-only baseline (5000) — the pending outflow must not count.
+    expect(expense).toEqual([{ categoryId: groceries.id, name: "Groceries", actual: 5000, budget: 6000 }]);
+  });
 });
 
 describe("getPeriodTotals", () => {
   it("returns income and expense totals for the given period only", async () => {
     await seed();
+    const totals = await getPeriodTotals(new Date(Date.UTC(2026, 2, 1)), "JPY");
+    expect(totals.income).toBeCloseTo(300000, 5);
+    expect(totals.expense).toBeCloseTo(5000, 5);
+  });
+
+  it("excludes pending transactions from both totals", async () => {
+    const { jpyAccount, salary, groceries } = await seed();
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 2, 8)),
+        amountCents: 888800,
+        direction: "inflow",
+        status: "pending",
+        categoryId: salary.id,
+        accountId: jpyAccount.id,
+      },
+    });
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 2, 9)),
+        amountCents: 444400,
+        direction: "outflow",
+        status: "pending",
+        categoryId: groceries.id,
+        accountId: jpyAccount.id,
+      },
+    });
+
     const totals = await getPeriodTotals(new Date(Date.UTC(2026, 2, 1)), "JPY");
     expect(totals.income).toBeCloseTo(300000, 5);
     expect(totals.expense).toBeCloseTo(5000, 5);

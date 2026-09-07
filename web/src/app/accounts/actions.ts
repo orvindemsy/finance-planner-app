@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { updateAccountStartingBalance, createAccount, deactivateAccount } from "@/lib/accounts-query";
+import {
+  updateAccountStartingBalance,
+  updateAccountNote,
+  createAccount,
+  deactivateAccount,
+} from "@/lib/accounts-query";
 
 export async function updateStartingBalanceAction(id: number, value: string): Promise<void> {
   const amount = Number(value);
@@ -12,6 +17,11 @@ export async function updateStartingBalanceAction(id: number, value: string): Pr
   await updateAccountStartingBalance(id, amount);
   revalidatePath("/accounts");
   revalidatePath("/");
+}
+
+export async function updateAccountNoteAction(id: number, value: string): Promise<void> {
+  await updateAccountNote(id, value.trim() === "" ? null : value);
+  revalidatePath("/accounts");
 }
 
 export async function addAccountAction(formData: FormData): Promise<void> {
@@ -35,12 +45,12 @@ export async function addAccountAction(formData: FormData): Promise<void> {
   await createAccount({ name: name.trim(), currency, startingBalance });
   revalidatePath("/accounts");
   revalidatePath("/");
-  revalidatePath("/transactions");
+  revalidatePath("/transactions/[currency]", "page");
 }
 
 export async function deleteAccountAction(id: number): Promise<void> {
   await deactivateAccount(id);
   revalidatePath("/accounts");
   revalidatePath("/");
-  revalidatePath("/transactions");
+  revalidatePath("/transactions/[currency]", "page");
 }

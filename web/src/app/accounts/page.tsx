@@ -1,14 +1,14 @@
 import { getAllAccounts } from "@/lib/accounts-query";
 import { CURRENCY_SYMBOLS } from "@/lib/fx";
-import { TH, TH_RIGHT, TD, TD_RIGHT, TR_HOVER, CARD, TABLE_SCROLL } from "@/lib/table-styles";
+import { TH, TH_RIGHT, TD, TD_RIGHT, TD_NOTES, TR_HOVER, CARD, TABLE_SCROLL } from "@/lib/table-styles";
 import { EditableCell } from "@/components/editable-cell";
 import { AddAccountForm } from "@/components/add-account-form";
 import { DeleteAccountButton } from "@/components/delete-account-button";
-import { updateStartingBalanceAction } from "./actions";
+import { updateStartingBalanceAction, updateAccountNoteAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const COLUMNS = ["Account", "Currency", "Starting Balance", "Current Balance", ""];
+const COLUMNS = ["Account", "Currency", "Starting Balance", "Current Balance", "Note", ""];
 
 export default async function AccountsPage() {
   const accounts = await getAllAccounts();
@@ -60,6 +60,13 @@ export default async function AccountsPage() {
                         {symbol}
                         {a.currentBalance.toLocaleString()}
                       </td>
+                      <EditableCell
+                        value={a.note ?? ""}
+                        displayValue={a.note ?? ""}
+                        editor={{ kind: "text" }}
+                        onSave={updateAccountNoteAction.bind(null, a.id)}
+                        className={TD_NOTES}
+                      />
                       <td className={TD}>
                         <DeleteAccountButton id={a.id} name={a.name} />
                       </td>

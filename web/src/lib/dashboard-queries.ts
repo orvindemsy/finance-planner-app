@@ -8,8 +8,16 @@ function actualForType(type: string, netCents: number): number {
   return result || 0; // normalize -0 to 0
 }
 
-export async function getBalancesByCurrency(): Promise<Record<string, number>> {
-  const accounts = await prisma.account.findMany({ include: { transactions: true } });
+// Balance as of the end of the given period (inclusive) — matches what the
+// Transactions page's Running Balance column shows for an account's last
+// transaction on or before that month, not today's all-time total. Selecting
+// an earlier month on the Dashboard should show what the account actually
+// held back then, not its current balance.
+export async function getBalancesByCurrency(period: Date): Promise<Record<string, number>> {
+  const { end } = periodBounds(period);
+  const accounts = await prisma.account.findMany({
+    include: { transactions: { where: { status: "finalized", date: { lte: end } } } },
+  });
   const totals: Record<string, number> = {};
   for (const account of accounts) {
     const netCents = account.transactions.reduce(
@@ -20,6 +28,27 @@ export async function getBalancesByCurrency(): Promise<Record<string, number>> {
     totals[account.currency] = (totals[account.currency] ?? 0) + accountCents / CENTS;
   }
   return totals;
+}
+
+export type AccountBalanceRow = { id: number; name: string; balance: number };
+
+// Per-account breakdown of the balance figure `getBalancesByCurrency` sums for
+// this currency — same finalized-only, as-of-period logic, but split out per
+// account so the Dashboard can show what makes up the aggregate total.
+export async function getAccountBalancesByCurrency(period: Date, currency: string): Promise<AccountBalanceRow[]> {
+  const { end } = periodBounds(period);
+  const accounts = await prisma.account.findMany({
+    where: { isActive: true, currency },
+    include: { transactions: { where: { status: "finalized", date: { lte: end } } } },
+    orderBy: { name: "asc" },
+  });
+  return accounts.map((account) => {
+    const netCents = account.transactions.reduce(
+      (sum, t) => sum + (t.direction === "inflow" ? t.amountCents : -t.amountCents),
+      0
+    );
+    return { id: account.id, name: account.name, balance: (account.startingBalanceCents + netCents) / CENTS };
+  });
 }
 
 export async function getAvailableMonths(currency: string): Promise<string[]> {
@@ -70,7 +99,7 @@ export async function getCategoryBreakdown(
     where: { isActive: true, type: { in: ["income", "expense"] } },
     include: {
       transactions: {
-        where: { date: { gte: start, lte: end }, account: { currency } },
+        where: { date: { gte: start, lte: end }, account: { currency }, status: "finalized" },
       },
     },
     orderBy: { name: "asc" },
@@ -123,6 +152,7 @@ export async function getPeriodTotals(period: Date, currency: string): Promise<{
         date: { gte: start, lte: end },
         account: { currency },
         category: { type },
+        status: "finalized",
       },
     });
     const netCents = transactions.reduce(

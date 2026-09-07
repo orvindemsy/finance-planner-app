@@ -5,7 +5,10 @@ import {
   getActiveCategories,
   getActiveAccounts,
   createTransaction,
+  createTransfer,
   updateTransaction,
+  deleteTransaction,
+  getRunningBalances,
 } from "../src/lib/transactions-query";
 
 describe("getTransactionsForPeriod", () => {
@@ -161,6 +164,40 @@ describe("getTransactionsForPeriod", () => {
     const byDirection = await getTransactionsForPeriod(period, { direction: "inflow" });
     expect(byDirection.map((r) => r.description)).toEqual(["Salary via cash"]);
   });
+
+  it("filters by the account's currency, for the JPY/IDR transaction views", async () => {
+    const period = new Date(Date.UTC(2026, 7, 1));
+    const jpyAccount = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const idrAccount = await prisma.account.create({ data: { name: "BCA", currency: "IDR" } });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 1)),
+        amountCents: 100000,
+        direction: "outflow",
+        categoryId: category.id,
+        accountId: jpyAccount.id,
+        description: "Yen purchase",
+      },
+    });
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 1)),
+        amountCents: 200000,
+        direction: "outflow",
+        categoryId: category.id,
+        accountId: idrAccount.id,
+        description: "Rupiah purchase",
+      },
+    });
+
+    const jpyRows = await getTransactionsForPeriod(period, { currency: "JPY" });
+    const idrRows = await getTransactionsForPeriod(period, { currency: "IDR" });
+
+    expect(jpyRows.map((r) => r.description)).toEqual(["Yen purchase"]);
+    expect(idrRows.map((r) => r.description)).toEqual(["Rupiah purchase"]);
+  });
 });
 
 describe("getActiveCategories / getActiveAccounts", () => {
@@ -177,6 +214,17 @@ describe("getActiveCategories / getActiveAccounts", () => {
 
     expect(categories.map((c) => c.name)).toEqual(["Apple", "Zebra"]);
     expect(accounts.map((a) => a.name)).toEqual(["Acash", "Zcash"]);
+  });
+
+  it("filters accounts by currency when given", async () => {
+    await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    await prisma.account.create({ data: { name: "BCA", currency: "IDR" } });
+
+    const jpyAccounts = await getActiveAccounts("JPY");
+    const idrAccounts = await getActiveAccounts("IDR");
+
+    expect(jpyAccounts.map((a) => a.name)).toEqual(["Cash"]);
+    expect(idrAccounts.map((a) => a.name)).toEqual(["BCA"]);
   });
 });
 
@@ -204,6 +252,86 @@ describe("createTransaction", () => {
       status: "finalized",
       notes: "note here",
     });
+  });
+});
+
+describe("createTransfer", () => {
+  it("creates a linked outflow on the From account and inflow on the To account, both tagged Internal Transfer", async () => {
+    const yucho = await prisma.account.create({ data: { name: "Yucho Transfer", currency: "JPY" } });
+    const paypay = await prisma.account.create({ data: { name: "Paypay", currency: "JPY" } });
+    await prisma.category.create({ data: { name: "Internal Transfer", type: "transfer" } });
+
+    await createTransfer({
+      date: new Date(Date.UTC(2026, 7, 15)),
+      fromAccountId: yucho.id,
+      toAccountId: paypay.id,
+      amount: 10000,
+      description: "Charge Paypay",
+    });
+
+    const yuchoRows = await getTransactionsForPeriod(new Date(Date.UTC(2026, 7, 1)), { accountId: yucho.id });
+    const paypayRows = await getTransactionsForPeriod(new Date(Date.UTC(2026, 7, 1)), { accountId: paypay.id });
+
+    expect(yuchoRows).toHaveLength(1);
+    expect(yuchoRows[0]).toMatchObject({ direction: "outflow", amount: 10000, description: "Charge Paypay" });
+    expect(paypayRows).toHaveLength(1);
+    expect(paypayRows[0]).toMatchObject({ direction: "inflow", amount: 10000, description: "Charge Paypay" });
+
+    // Both legs must be cross-referenced so the pairing is auditable later.
+    const outflowNote = await prisma.transaction.findFirst({ where: { accountId: yucho.id } });
+    const inflowNote = await prisma.transaction.findFirst({ where: { accountId: paypay.id } });
+    expect(outflowNote?.notes).toContain(`#${inflowNote?.id}`);
+    expect(inflowNote?.notes).toContain(`#${outflowNote?.id}`);
+  });
+
+  it("auto-generates a description referencing the other account when none is given", async () => {
+    const cash = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const paypay = await prisma.account.create({ data: { name: "Paypay", currency: "JPY" } });
+    await prisma.category.create({ data: { name: "Internal Transfer", type: "transfer" } });
+
+    await createTransfer({
+      date: new Date(Date.UTC(2026, 7, 15)),
+      fromAccountId: cash.id,
+      toAccountId: paypay.id,
+      amount: 5000,
+      description: null,
+    });
+
+    const cashRows = await getTransactionsForPeriod(new Date(Date.UTC(2026, 7, 1)), { accountId: cash.id });
+    const paypayRows = await getTransactionsForPeriod(new Date(Date.UTC(2026, 7, 1)), { accountId: paypay.id });
+    expect(cashRows[0].description).toBe("Transfer to Paypay");
+    expect(paypayRows[0].description).toBe("Transfer from Cash");
+  });
+
+  it("rejects a transfer where From and To are the same account", async () => {
+    const cash = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    await prisma.category.create({ data: { name: "Internal Transfer", type: "transfer" } });
+
+    await expect(
+      createTransfer({
+        date: new Date(Date.UTC(2026, 7, 15)),
+        fromAccountId: cash.id,
+        toAccountId: cash.id,
+        amount: 1000,
+        description: null,
+      })
+    ).rejects.toThrow("From and To accounts must be different");
+  });
+
+  it("rejects a transfer between accounts of different currencies", async () => {
+    const cash = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const bca = await prisma.account.create({ data: { name: "BCA", currency: "IDR" } });
+    await prisma.category.create({ data: { name: "Internal Transfer", type: "transfer" } });
+
+    await expect(
+      createTransfer({
+        date: new Date(Date.UTC(2026, 7, 15)),
+        fromAccountId: cash.id,
+        toAccountId: bca.id,
+        amount: 1000,
+        description: null,
+      })
+    ).rejects.toThrow("From and To accounts must be the same currency");
   });
 });
 
@@ -272,5 +400,120 @@ describe("updateTransaction", () => {
     expect(august).toEqual([]);
     expect(july).toHaveLength(1);
     expect(july[0].description).toBe("Move me");
+  });
+});
+
+describe("deleteTransaction", () => {
+  it("removes the transaction so it no longer appears in its period", async () => {
+    const account = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    await createTransaction({
+      date: new Date(Date.UTC(2026, 7, 1)),
+      direction: "outflow",
+      categoryId: category.id,
+      accountId: account.id,
+      description: "Delete me",
+      amount: 50,
+      status: "finalized",
+      notes: null,
+    });
+
+    const [before] = await getTransactionsForPeriod(new Date(Date.UTC(2026, 7, 1)));
+    await deleteTransaction(before.id);
+
+    const after = await getTransactionsForPeriod(new Date(Date.UTC(2026, 7, 1)));
+    expect(after).toEqual([]);
+  });
+});
+
+describe("getRunningBalances", () => {
+  it("computes cumulative balance per transaction, starting from the account's starting balance", async () => {
+    const account = await prisma.account.create({
+      data: { name: "Yucho Transfer", currency: "JPY", startingBalanceCents: 100000 },
+    });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    const t1 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 1)), amountCents: 30000, direction: "inflow", categoryId: category.id, accountId: account.id },
+    });
+    const t2 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 5)), amountCents: 5000, direction: "outflow", categoryId: category.id, accountId: account.id },
+    });
+    const t3 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 1, 1)), amountCents: 2000, direction: "outflow", categoryId: category.id, accountId: account.id },
+    });
+
+    const balances = await getRunningBalances([account.id]);
+
+    expect(balances.get(t1.id)).toBeCloseTo(1300, 5); // 1000 + 300
+    expect(balances.get(t2.id)).toBeCloseTo(1250, 5); // 1300 - 50
+    expect(balances.get(t3.id)).toBeCloseTo(1230, 5); // 1250 - 20
+  });
+
+  it("carries the balance forward unchanged for pending transactions, without affecting later finalized ones", async () => {
+    const account = await prisma.account.create({
+      data: { name: "Yucho Transfer", currency: "JPY", startingBalanceCents: 100000 },
+    });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    const finalized1 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 1)), amountCents: 30000, direction: "inflow", status: "finalized", categoryId: category.id, accountId: account.id },
+    });
+    const pending = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 2)), amountCents: 999900, direction: "inflow", status: "pending", categoryId: category.id, accountId: account.id },
+    });
+    const finalized2 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 3)), amountCents: 5000, direction: "outflow", status: "finalized", categoryId: category.id, accountId: account.id },
+    });
+
+    const balances = await getRunningBalances([account.id]);
+
+    expect(balances.get(finalized1.id)).toBeCloseTo(1300, 5); // 1000 + 300
+    // Pending: same balance as the row before it, not affected by its own amount.
+    expect(balances.get(pending.id)).toBeCloseTo(1300, 5);
+    // finalized2 continues from finalized1's running total, skipping the pending inflow entirely.
+    expect(balances.get(finalized2.id)).toBeCloseTo(1250, 5); // 1300 - 50
+  });
+
+  it("keeps each account's running balance independent of the others", async () => {
+    const a1 = await prisma.account.create({ data: { name: "Cash", currency: "JPY", startingBalanceCents: 0 } });
+    const a2 = await prisma.account.create({ data: { name: "Paypay", currency: "JPY", startingBalanceCents: 50000 } });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    const t1 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 1)), amountCents: 10000, direction: "inflow", categoryId: category.id, accountId: a1.id },
+    });
+    const t2 = await prisma.transaction.create({
+      data: { date: new Date(Date.UTC(2026, 0, 1)), amountCents: 10000, direction: "outflow", categoryId: category.id, accountId: a2.id },
+    });
+
+    const balances = await getRunningBalances([a1.id, a2.id]);
+
+    expect(balances.get(t1.id)).toBeCloseTo(100, 5); // Cash: 0 + 100
+    expect(balances.get(t2.id)).toBeCloseTo(400, 5); // Paypay: 500 - 100
+  });
+
+  it("breaks same-date ties by transaction id, ascending", async () => {
+    const account = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+    const sameDate = new Date(Date.UTC(2026, 0, 1));
+
+    const first = await prisma.transaction.create({
+      data: { date: sameDate, amountCents: 10000, direction: "inflow", categoryId: category.id, accountId: account.id },
+    });
+    const second = await prisma.transaction.create({
+      data: { date: sameDate, amountCents: 3000, direction: "outflow", categoryId: category.id, accountId: account.id },
+    });
+
+    const balances = await getRunningBalances([account.id]);
+
+    expect(balances.get(first.id)).toBeCloseTo(100, 5);
+    expect(balances.get(second.id)).toBeCloseTo(70, 5);
+  });
+
+  it("returns an empty map for an empty account list", async () => {
+    const balances = await getRunningBalances([]);
+    expect(balances.size).toBe(0);
   });
 });

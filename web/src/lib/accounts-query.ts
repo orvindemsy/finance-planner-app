@@ -8,12 +8,13 @@ export type AccountRow = {
   currency: string;
   startingBalance: number;
   currentBalance: number;
+  note: string | null;
 };
 
 export async function getAllAccounts(): Promise<AccountRow[]> {
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
-    include: { transactions: true },
+    include: { transactions: { where: { status: "finalized" } } },
     orderBy: { name: "asc" },
   });
 
@@ -28,6 +29,7 @@ export async function getAllAccounts(): Promise<AccountRow[]> {
       currency: a.currency,
       startingBalance: a.startingBalanceCents / CENTS,
       currentBalance: (a.startingBalanceCents + netCents) / CENTS,
+      note: a.note,
     };
   });
 }
@@ -36,6 +38,13 @@ export async function updateAccountStartingBalance(id: number, amount: number): 
   await prisma.account.update({
     where: { id },
     data: { startingBalanceCents: Math.round(amount * CENTS) },
+  });
+}
+
+export async function updateAccountNote(id: number, note: string | null): Promise<void> {
+  await prisma.account.update({
+    where: { id },
+    data: { note },
   });
 }
 

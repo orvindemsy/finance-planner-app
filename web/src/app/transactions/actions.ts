@@ -1,33 +1,67 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createTransaction, updateTransaction, type TransactionFieldUpdate } from "@/lib/transactions-query";
+import {
+  createTransaction,
+  createTransfer,
+  updateTransaction,
+  deleteTransaction,
+  type TransactionFieldUpdate,
+} from "@/lib/transactions-query";
 
-export async function addTransactionAction(formData: FormData): Promise<void> {
+// The Transactions page now lives at /transactions/[currency] (jpy/idr);
+// this revalidates every currency variant plus the Dashboard.
+function revalidateTransactions() {
+  revalidatePath("/transactions/[currency]", "page");
+  revalidatePath("/");
+}
+
+// Creates a blank placeholder transaction (amount 0, outflow, finalized) dated
+// to the first day of the given period, using the first available category
+// and account as defaults. The row then appears in the table below, editable
+// cell-by-cell via the same click-to-edit UI as every other transaction —
+// there's no separate add-transaction form.
+export async function addBlankTransactionAction(
+  dateStr: string,
+  categoryId: number,
+  accountId: number
+): Promise<void> {
+  await createTransaction({
+    date: new Date(dateStr),
+    direction: "outflow",
+    categoryId,
+    accountId,
+    description: null,
+    amount: 0,
+    status: "finalized",
+    notes: null,
+  });
+
+  revalidateTransactions();
+}
+
+export async function addTransferAction(formData: FormData): Promise<void> {
   const dateStr = formData.get("date");
-  const direction = formData.get("direction");
-  const categoryId = formData.get("categoryId");
-  const accountId = formData.get("accountId");
-  const description = formData.get("description");
+  const fromAccountId = formData.get("fromAccountId");
+  const toAccountId = formData.get("toAccountId");
   const amountStr = formData.get("amount");
-  const status = formData.get("status");
-  const notes = formData.get("notes");
+  const description = formData.get("description");
 
   if (
     typeof dateStr !== "string" ||
     !dateStr ||
-    typeof direction !== "string" ||
-    (direction !== "inflow" && direction !== "outflow") ||
-    typeof categoryId !== "string" ||
-    !categoryId ||
-    typeof accountId !== "string" ||
-    !accountId ||
+    typeof fromAccountId !== "string" ||
+    !fromAccountId ||
+    typeof toAccountId !== "string" ||
+    !toAccountId ||
     typeof amountStr !== "string" ||
-    !amountStr ||
-    typeof status !== "string" ||
-    (status !== "finalized" && status !== "pending")
+    !amountStr
   ) {
     throw new Error("Missing or invalid required field");
+  }
+
+  if (fromAccountId === toAccountId) {
+    throw new Error("From and To accounts must be different");
   }
 
   const amount = Number(amountStr);
@@ -35,19 +69,15 @@ export async function addTransactionAction(formData: FormData): Promise<void> {
     throw new Error("Amount must be a positive number");
   }
 
-  await createTransaction({
+  await createTransfer({
     date: new Date(dateStr),
-    direction,
-    categoryId: Number(categoryId),
-    accountId: Number(accountId),
-    description: typeof description === "string" && description.trim() !== "" ? description : null,
+    fromAccountId: Number(fromAccountId),
+    toAccountId: Number(toAccountId),
     amount,
-    status,
-    notes: typeof notes === "string" && notes.trim() !== "" ? notes : null,
+    description: typeof description === "string" && description.trim() !== "" ? description : null,
   });
 
-  revalidatePath("/transactions");
-  revalidatePath("/");
+  revalidateTransactions();
 }
 
 const EDITABLE_FIELDS = [
@@ -114,6 +144,10 @@ export async function updateTransactionFieldAction(id: number, field: string, va
   }
 
   await updateTransaction(id, update);
-  revalidatePath("/transactions");
-  revalidatePath("/");
+  revalidateTransactions();
+}
+
+export async function deleteTransactionAction(id: number): Promise<void> {
+  await deleteTransaction(id);
+  revalidateTransactions();
 }

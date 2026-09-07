@@ -1,10 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { CATEGORY_FILTER_COOKIE, ACCOUNT_FILTER_COOKIE, DIRECTION_FILTER_COOKIE } from "@/lib/transaction-filters-cookie";
 
 const SELECT = "border rounded px-2 py-1 bg-white dark:bg-gray-800 dark:border-gray-600 text-sm";
 
+function setCookie(name: string, value: string) {
+  document.cookie = `${name}=${value}; path=/; max-age=31536000; samesite=lax`;
+}
+
 export function TransactionFilters({
+  currencySlug,
   year,
   month,
   categoryId,
@@ -13,6 +19,7 @@ export function TransactionFilters({
   categories,
   accounts,
 }: {
+  currencySlug: string;
   year: string;
   month: string;
   categoryId: string;
@@ -22,19 +29,21 @@ export function TransactionFilters({
   accounts: { id: number; name: string }[];
 }) {
   const router = useRouter();
+  const categoryCookie = `${CATEGORY_FILTER_COOKIE}-${currencySlug}`;
+  const accountCookie = `${ACCOUNT_FILTER_COOKIE}-${currencySlug}`;
+  const directionCookie = `${DIRECTION_FILTER_COOKIE}-${currencySlug}`;
 
   function navigate(overrides: Record<string, string>) {
-    const params = new URLSearchParams({
-      period: `${year}-${month}`,
-      category: categoryId,
-      account: accountId,
-      direction,
-      ...overrides,
-    });
+    const merged = { category: categoryId, account: accountId, direction, ...overrides };
+    setCookie(categoryCookie, merged.category);
+    setCookie(accountCookie, merged.account);
+    setCookie(directionCookie, merged.direction);
+
+    const params = new URLSearchParams({ period: `${year}-${month}`, ...merged });
     for (const [key, value] of Array.from(params.entries())) {
       if (value === "all") params.delete(key);
     }
-    router.push(`/transactions?${params.toString()}`);
+    router.push(`/transactions/${currencySlug}?${params.toString()}`);
   }
 
   return (

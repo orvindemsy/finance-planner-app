@@ -12,6 +12,7 @@ model Account {
   name                 String        @unique
   currency             String        // "JPY" | "IDR"
   startingBalanceCents Int           @default(0)
+  note                 String?
   isActive             Boolean       @default(true)
   createdAt            DateTime      @default(now())
   transactions         Transaction[]

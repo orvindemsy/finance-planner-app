@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { PERIOD_COOKIE } from "@/lib/period-cookie";
 
 // TODO: derive from the ledger tab once it exists, instead of hardcoding.
 const YEARS = ["2026"];
@@ -34,7 +35,9 @@ export function PeriodSelect({
   const router = useRouter();
 
   function navigate(newYear: string, newMonth: string) {
-    const params = new URLSearchParams({ period: `${newYear}-${newMonth}` });
+    const period = `${newYear}-${newMonth}`;
+    document.cookie = `${PERIOD_COOKIE}=${period}; path=/; max-age=31536000; samesite=lax`;
+    const params = new URLSearchParams({ period });
     if (currency) params.set("currency", currency);
     router.push(`${basePath}?${params.toString()}`);
   }
