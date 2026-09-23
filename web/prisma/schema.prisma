@@ -74,6 +74,29 @@ model Budget {
   @@map("budgets")
 }
 
+model Setting {
+  key   String @id
+  value String
+
+  @@map("settings")
+}
+
+model Holding {
+  id               Int      @id @default(autoincrement())
+  name             String
+  currency         String   // "JPY" | "IDR"
+  quantity         Int      // units/shares held
+  avgPriceCents    Int      // average buy price (cents) per unitScale units
+  marketPriceCents Int      // current price (cents) per unitScale units
+  unitScale        Int      @default(10000) // JP mutual funds quote price per 10,000 units; individual stocks use 1
+  isActive         Boolean  @default(true)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("holdings")
+}
+
 model BudgetDefault {
   id                 Int      @id @default(autoincrement())
   categoryId         Int

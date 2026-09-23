@@ -20,6 +20,8 @@ export async function resetDb() {
   await prisma.budgetDefault.deleteMany();
   await prisma.category.deleteMany();
   await prisma.account.deleteMany();
+  await prisma.holding.deleteMany();
+  await prisma.setting.deleteMany();
 }
 
 beforeEach(async () => {

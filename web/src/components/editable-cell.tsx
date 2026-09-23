@@ -19,12 +19,15 @@ export function EditableCell({
   editor,
   onSave,
   className,
+  as: Tag = "td",
 }: {
   value: string;
   displayValue: React.ReactNode;
   editor: EditorKind;
   onSave: (newValue: string) => Promise<void>;
   className?: string;
+  /** Wrapper element — "td" (default) for table rows, "span" for standalone use outside a table. */
+  as?: "td" | "span";
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
@@ -49,18 +52,20 @@ export function EditableCell({
 
   const cellClassName = `${className ?? TD} cursor-pointer`;
 
+  const wrapperClassName = Tag === "td" ? (className ?? TD) : (className ?? "");
+
   if (!editing) {
     return (
-      <td className={cellClassName} onClick={() => setEditing(true)} title="Click to edit">
+      <Tag className={Tag === "td" ? cellClassName : `${wrapperClassName} cursor-pointer`} onClick={() => setEditing(true)} title="Click to edit">
         {displayValue}
         {error && <div className="text-xs text-red-500">{error}</div>}
-      </td>
+      </Tag>
     );
   }
 
   if (editor.kind === "select") {
     return (
-      <td className={className ?? TD}>
+      <Tag className={wrapperClassName}>
         <select
           autoFocus
           defaultValue={value}
@@ -78,12 +83,12 @@ export function EditableCell({
             </option>
           ))}
         </select>
-      </td>
+      </Tag>
     );
   }
 
   return (
-    <td className={className ?? TD}>
+    <Tag className={wrapperClassName}>
       <input
         autoFocus
         type={editor.kind}
@@ -98,6 +103,6 @@ export function EditableCell({
         }}
         className={EDIT_INPUT}
       />
-    </td>
+    </Tag>
   );
 }

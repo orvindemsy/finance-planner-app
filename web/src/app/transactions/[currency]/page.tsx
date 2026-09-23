@@ -63,6 +63,8 @@ export default async function TransactionsPage({
     account?: string;
     direction?: string;
     sort?: string;
+    sortBy?: string;
+    search?: string;
   }>;
 }) {
   const { currency: currencySlug } = await params;
@@ -77,6 +79,12 @@ export default async function TransactionsPage({
   const month = String(period.getUTCMonth() + 1).padStart(2, "0");
   const basePath = `/transactions/${currencySlug}`;
 
+  const today = new Date();
+  const isCurrentPeriod = year === String(today.getFullYear()) && month === String(today.getMonth() + 1).padStart(2, "0");
+  const defaultDate = isCurrentPeriod
+    ? `${year}-${month}-${String(today.getDate()).padStart(2, "0")}`
+    : `${year}-${month}-01`;
+
   const categoryCookie = `${CATEGORY_FILTER_COOKIE}-${currencySlug}`;
   const accountCookie = `${ACCOUNT_FILTER_COOKIE}-${currencySlug}`;
   const directionCookie = `${DIRECTION_FILTER_COOKIE}-${currencySlug}`;
@@ -89,9 +97,11 @@ export default async function TransactionsPage({
   const accountId = accountParam && accountParam !== "all" ? Number(accountParam) : undefined;
   const direction = directionParam === "inflow" || directionParam === "outflow" ? directionParam : undefined;
   const sort = params_.sort === "asc" ? "asc" : "desc";
+  const sortBy = params_.sortBy === "amount" ? "amount" : "date";
+  const search = params_.search ?? "";
 
   const [transactions, categories, accounts] = await Promise.all([
-    getTransactionsForPeriod(period, { categoryId, accountId, direction, sort, currency: dbCurrency }),
+    getTransactionsForPeriod(period, { categoryId, accountId, direction, sort, sortBy, search, currency: dbCurrency }),
     getActiveCategories(),
     getActiveAccounts(dbCurrency),
   ]);
@@ -102,10 +112,15 @@ export default async function TransactionsPage({
   const visibleAccountIds = [...new Set(transactions.map((tx) => tx.accountId))];
   const runningBalances = await getRunningBalances(visibleAccountIds);
 
-  const sortLinkParams = new URLSearchParams({ period: `${year}-${month}`, sort: sort === "asc" ? "desc" : "asc" });
-  if (categoryId) sortLinkParams.set("category", String(categoryId));
-  if (accountId) sortLinkParams.set("account", String(accountId));
-  if (direction) sortLinkParams.set("direction", direction);
+  function sortLink(field: "date" | "amount") {
+    const nextDir = sortBy === field && sort === "asc" ? "desc" : "asc";
+    const p = new URLSearchParams({ period: `${year}-${month}`, sortBy: field, sort: nextDir });
+    if (categoryId) p.set("category", String(categoryId));
+    if (accountId) p.set("account", String(accountId));
+    if (direction) p.set("direction", direction);
+    if (search) p.set("search", search);
+    return `${basePath}?${p.toString()}`;
+  }
 
   const periodStr = `${year}-${month}`;
   const currencyTab = (slug: string, label: string) => (
@@ -139,7 +154,7 @@ export default async function TransactionsPage({
           {currencySlug === "jpy" && <CashCounter />}
           <AddTransferForm accounts={accounts} />
           <AddTransactionForm
-            defaultDate={`${year}-${month}-01`}
+            defaultDate={defaultDate}
             defaultCategoryId={categories[0]?.id}
             defaultAccountId={accounts[0]?.id}
           />
@@ -153,6 +168,7 @@ export default async function TransactionsPage({
         categoryId={categoryId ? String(categoryId) : "all"}
         accountId={accountId ? String(accountId) : "all"}
         direction={direction ?? "all"}
+        search={search}
         categories={categories}
         accounts={accounts}
       />
@@ -168,12 +184,18 @@ export default async function TransactionsPage({
                 {COLUMNS.map((col) =>
                   col === "Date" ? (
                     <th key={col} className={TH}>
-                      <Link href={`${basePath}?${sortLinkParams.toString()}`} className="hover:underline">
-                        Date {sort === "asc" ? "▲" : "▼"}
+                      <Link href={sortLink("date")} className="hover:underline">
+                        Date {sortBy === "date" ? (sort === "asc" ? "▲" : "▼") : ""}
+                      </Link>
+                    </th>
+                  ) : col === "Amount" ? (
+                    <th key={col} className={TH_RIGHT}>
+                      <Link href={sortLink("amount")} className="hover:underline">
+                        Amount {sortBy === "amount" ? (sort === "asc" ? "▲" : "▼") : ""}
                       </Link>
                     </th>
                   ) : (
-                    <th key={col} className={col === "Amount" || col === "Running Balance" ? TH_RIGHT : TH}>
+                    <th key={col} className={col === "Running Balance" ? TH_RIGHT : TH}>
                       {col}
                     </th>
                   )

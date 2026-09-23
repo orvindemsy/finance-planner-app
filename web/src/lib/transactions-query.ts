@@ -25,6 +25,8 @@ export type TransactionFilters = {
   accountId?: number;
   direction?: "inflow" | "outflow";
   sort?: "asc" | "desc";
+  sortBy?: "date" | "amount";
+  search?: string;
   currency?: string;
 };
 
@@ -41,14 +43,16 @@ export async function getTransactionsForPeriod(
   if (filters.direction) where.direction = filters.direction;
 
   const sortDir = filters.sort === "asc" ? "asc" : "desc";
+  const orderBy: Prisma.TransactionOrderByWithRelationInput[] =
+    filters.sortBy === "amount" ? [{ amountCents: sortDir }, { id: sortDir }] : [{ date: sortDir }, { id: sortDir }];
 
   const transactions = await prisma.transaction.findMany({
     where,
     include: { category: true, account: true },
-    orderBy: [{ date: sortDir }, { id: sortDir }],
+    orderBy,
   });
 
-  return transactions.map((t) => ({
+  const rows = transactions.map((t) => ({
     id: t.id,
     month: t.date.getUTCMonth() + 1,
     date: t.date,
@@ -63,6 +67,15 @@ export async function getTransactionsForPeriod(
     status: t.status as "finalized" | "pending",
     notes: t.notes,
   }));
+
+  // Keyword search runs in JS rather than the DB query: SQLite's default
+  // collation is case-sensitive, so Prisma's `contains` (no `insensitive`
+  // mode support on SQLite) would miss differently-cased matches.
+  const keyword = filters.search?.trim().toLowerCase();
+  if (!keyword) return rows;
+  return rows.filter((r) =>
+    [r.description, r.notes, r.categoryName, r.accountName].some((field) => field?.toLowerCase().includes(keyword))
+  );
 }
 
 // Running balance is intrinsic to each transaction's true chronological

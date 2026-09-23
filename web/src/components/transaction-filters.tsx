@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORY_FILTER_COOKIE, ACCOUNT_FILTER_COOKIE, DIRECTION_FILTER_COOKIE } from "@/lib/transaction-filters-cookie";
 
@@ -16,6 +17,7 @@ export function TransactionFilters({
   categoryId,
   accountId,
   direction,
+  search,
   categories,
   accounts,
 }: {
@@ -25,25 +27,31 @@ export function TransactionFilters({
   categoryId: string;
   accountId: string;
   direction: string;
+  search: string;
   categories: { id: number; name: string }[];
   accounts: { id: number; name: string }[];
 }) {
   const router = useRouter();
+  const [searchInput, setSearchInput] = useState(search);
   const categoryCookie = `${CATEGORY_FILTER_COOKIE}-${currencySlug}`;
   const accountCookie = `${ACCOUNT_FILTER_COOKIE}-${currencySlug}`;
   const directionCookie = `${DIRECTION_FILTER_COOKIE}-${currencySlug}`;
 
   function navigate(overrides: Record<string, string>) {
-    const merged = { category: categoryId, account: accountId, direction, ...overrides };
+    const merged = { category: categoryId, account: accountId, direction, search, ...overrides };
     setCookie(categoryCookie, merged.category);
     setCookie(accountCookie, merged.account);
     setCookie(directionCookie, merged.direction);
 
     const params = new URLSearchParams({ period: `${year}-${month}`, ...merged });
     for (const [key, value] of Array.from(params.entries())) {
-      if (value === "all") params.delete(key);
+      if (value === "all" || value === "") params.delete(key);
     }
     router.push(`/transactions/${currencySlug}?${params.toString()}`);
+  }
+
+  function submitSearch() {
+    navigate({ search: searchInput.trim() });
   }
 
   return (
@@ -90,6 +98,35 @@ export function TransactionFilters({
           <option value="outflow">Outflow</option>
         </select>
       </label>
+      <div className="flex items-center gap-1 text-sm">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submitSearch();
+          }}
+          placeholder="Search description, notes..."
+          className="border rounded px-2 py-1 bg-white dark:bg-gray-800 dark:border-gray-600 text-sm w-56"
+        />
+        <button
+          onClick={submitSearch}
+          className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800/50"
+        >
+          Search
+        </button>
+        {search && (
+          <button
+            onClick={() => {
+              setSearchInput("");
+              navigate({ search: "" });
+            }}
+            className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }

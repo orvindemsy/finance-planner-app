@@ -116,6 +116,81 @@ describe("getTransactionsForPeriod", () => {
     expect(ascending.map((r) => r.description)).toEqual(["Early", "Late"]);
   });
 
+  it("sorts by amount instead of date when sortBy: 'amount' is given", async () => {
+    const account = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const category = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 20)),
+        amountCents: 100000,
+        direction: "outflow",
+        categoryId: category.id,
+        accountId: account.id,
+        description: "Small but late",
+      },
+    });
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 1)),
+        amountCents: 500000,
+        direction: "outflow",
+        categoryId: category.id,
+        accountId: account.id,
+        description: "Big but early",
+      },
+    });
+
+    const period = new Date(Date.UTC(2026, 7, 1));
+    const descending = await getTransactionsForPeriod(period, { sortBy: "amount" });
+    const ascending = await getTransactionsForPeriod(period, { sortBy: "amount", sort: "asc" });
+
+    expect(descending.map((r) => r.description)).toEqual(["Big but early", "Small but late"]);
+    expect(ascending.map((r) => r.description)).toEqual(["Small but late", "Big but early"]);
+  });
+
+  it("filters by a case-insensitive keyword across description, notes, category, and account", async () => {
+    const cash = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
+    const groceries = await prisma.category.create({ data: { name: "Groceries", type: "expense" } });
+
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 1)),
+        amountCents: 100000,
+        direction: "outflow",
+        categoryId: groceries.id,
+        accountId: cash.id,
+        description: "OK Supaa run",
+      },
+    });
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 2)),
+        amountCents: 50000,
+        direction: "outflow",
+        categoryId: groceries.id,
+        accountId: cash.id,
+        description: "Coffee",
+        notes: "with the OK crew",
+      },
+    });
+    await prisma.transaction.create({
+      data: {
+        date: new Date(Date.UTC(2026, 7, 3)),
+        amountCents: 20000,
+        direction: "outflow",
+        categoryId: groceries.id,
+        accountId: cash.id,
+        description: "Unrelated purchase",
+      },
+    });
+
+    const period = new Date(Date.UTC(2026, 7, 1));
+    const rows = await getTransactionsForPeriod(period, { search: "ok" });
+
+    expect(rows.map((r) => r.description).sort()).toEqual(["Coffee", "OK Supaa run"]);
+  });
+
   it("filters by category, account, and direction", async () => {
     const cash = await prisma.account.create({ data: { name: "Cash", currency: "JPY" } });
     const card = await prisma.account.create({ data: { name: "Card", currency: "JPY" } });
