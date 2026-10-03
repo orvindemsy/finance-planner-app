@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy.orm import Session
 
 from app.db.base import get_db
-from app.db.models import Category, Transaction
+from app.db.models import (
+    Account,
+    Category,
+    Transaction,
+    TransactionDirection,
+    TransactionStatus,
+)
 from app.templating import templates
 
 router = APIRouter(prefix="/transactions")
@@ -18,6 +24,7 @@ def _list_context(
     start: Optional[str],
     end: Optional[str],
     category_id: Optional[int],
+    account_id: Optional[int],
     q: Optional[str],
 ) -> dict:
     query = db.query(Transaction)
@@ -27,20 +34,25 @@ def _list_context(
         query = query.filter(Transaction.date <= end)
     if category_id:
         query = query.filter(Transaction.category_id == category_id)
+    if account_id:
+        query = query.filter(Transaction.account_id == account_id)
     if q:
         query = query.filter(Transaction.description.ilike(f"%{q}%"))
 
     transactions = query.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(200).all()
     categories = db.query(Category).filter(Category.is_active.is_(True)).order_by(Category.name).all()
+    accounts = db.query(Account).filter(Account.is_active.is_(True)).order_by(Account.name).all()
 
     return {
         "request": request,
         "transactions": transactions,
         "categories": categories,
+        "accounts": accounts,
         "filters": {
             "start": start or "",
             "end": end or "",
             "category_id": category_id or "",
+            "account_id": account_id or "",
             "q": q or "",
         },
     }
@@ -52,10 +64,11 @@ def list_transactions(
     start: Optional[str] = None,
     end: Optional[str] = None,
     category_id: Optional[int] = None,
+    account_id: Optional[int] = None,
     q: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    context = _list_context(request, db, start, end, category_id, q)
+    context = _list_context(request, db, start, end, category_id, account_id, q)
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse("_transactions_table.html", context)
     return templates.TemplateResponse("transactions.html", context)
@@ -66,8 +79,11 @@ def create_transaction(
     request: Request,
     date_: date = Form(..., alias="date"),
     category_id: int = Form(...),
+    account_id: int = Form(...),
+    direction: TransactionDirection = Form(...),
     amount: str = Form(...),
     description: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
     source: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -79,12 +95,16 @@ def create_transaction(
     transaction = Transaction(
         date=date_,
         category_id=category_id,
+        account_id=account_id,
+        direction=direction,
+        status=TransactionStatus.FINALIZED,
         amount=amount_value,
         description=description or None,
+        notes=notes or None,
         source=source or None,
     )
     db.add(transaction)
     db.commit()
 
-    context = _list_context(request, db, None, None, None, None)
+    context = _list_context(request, db, None, None, None, None, None)
     return templates.TemplateResponse("_transactions_table.html", context)

@@ -1,0 +1,23 @@
+<div id="accounts-table">
+<table>
+    <thead>
+        <tr><th>Name</th><th>Currency</th><th>Active</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for a in accounts %}
+        <tr>
+            <td>{{ a.name }}</td>
+            <td>{{ a.currency }}</td>
+            <td>{{ "Yes" if a.is_active else "No" }}</td>
+            <td>
+                <form style="margin:0" hx-post="/accounts/{{ a.id }}/toggle" hx-target="#accounts-table" hx-swap="outerHTML">
+                    <button type="submit" class="secondary">{{ "Disable" if a.is_active else "Enable" }}</button>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="4">No accounts yet.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>

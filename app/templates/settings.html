@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Settings - Budget Tracker{% endblock %}
+{% block content %}
+<h2>Monthly Budget Defaults</h2>
+<p class="hint">
+    Set a recurring planned amount per category here — it applies to every month
+    automatically. Override a specific month on the <a href="/budgets">Budgets</a> page instead.
+</p>
+
+<div class="period-nav">
+    <span class="currency-switch">
+        <span class="currency-switch-label">Currency:</span>
+        <a href="/settings?currency=JPY" class="{{ 'active' if currency == 'JPY' }}">JPY</a>
+        <a href="/settings?currency=IDR" class="{{ 'active' if currency == 'IDR' }}">IDR</a>
+    </span>
+</div>
+
+<table>
+    <thead>
+        <tr><th>Category</th><th>Type</th><th>Default Planned ({{ currency }})</th></tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        {% include "_settings_row.html" %}
+    {% else %}
+        <tr><td colspan="3">No categories yet. Add one on the Categories page.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

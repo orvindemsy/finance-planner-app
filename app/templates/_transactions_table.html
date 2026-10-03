@@ -1,19 +1,23 @@
 <div id="transactions-table">
 <table>
     <thead>
-        <tr><th>Date</th><th>Category</th><th>Amount</th><th>Description</th><th>Source</th></tr>
+        <tr><th>Date</th><th>Category</th><th>Account</th><th>Amount</th><th>Status</th><th>Description</th><th>Notes</th></tr>
     </thead>
     <tbody>
     {% for tx in transactions %}
         <tr>
             <td>{{ tx.date }}</td>
             <td>{{ tx.category.name }}</td>
-            <td>{{ "%.2f"|format(tx.amount) }}</td>
+            <td>{{ tx.account.name }} ({{ tx.account.currency }})</td>
+            <td class="{{ 'positive' if tx.direction.value == 'inflow' else 'negative' }}">
+                {{ '+' if tx.direction.value == 'inflow' else '-' }}{{ tx.amount|money }}
+            </td>
+            <td>{{ tx.status.value }}</td>
             <td>{{ tx.description or "" }}</td>
-            <td>{{ tx.source or "" }}</td>
+            <td>{{ tx.notes or "" }}</td>
         </tr>
     {% else %}
-        <tr><td colspan="5">No transactions match these filters.</td></tr>
+        <tr><td colspan="7">No transactions match these filters.</td></tr>
     {% endfor %}
     </tbody>
 </table>

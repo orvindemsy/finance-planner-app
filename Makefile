@@ -20,10 +20,10 @@ migration:
 	poetry run alembic revision --autogenerate -m "$(name)"
 
 import:
-	poetry run python scripts/import_csv.py
+	poetry run python scripts/import_csv.py --year $(YEAR)
 
 import-dry-run:
-	poetry run python scripts/import_csv.py --dry-run
+	poetry run python scripts/import_csv.py --year $(YEAR) --dry-run
 
 dev:
 	poetry run uvicorn app.main:app --reload --port 8000

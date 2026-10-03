@@ -118,4 +118,40 @@ button.secondary { background: #6b7280; }
 }
 .badge.income { background: #d1fae5; color: #065f46; }
 .badge.expense { background: #fee2e2; color: #991b1b; }
+.badge.savings { background: #dbeafe; color: #1e40af; }
+.badge.transfer { background: #e5e7eb; color: #374151; }
 .budget-amount-input { width: 100px; }
+.currency-switch { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.currency-switch-label { font-size: 0.8rem; color: #6b7280; }
+.currency-switch a { text-decoration: none; color: #6b7280; font-size: 0.85rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
+.currency-switch a.active { background: #1f2937; color: #fff; }
+.fx-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    padding: 0.6rem 1rem;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    flex-wrap: wrap;
+}
+.fx-card { display: flex; align-items: baseline; gap: 0.4rem; }
+.fx-card .label { font-size: 0.8rem; color: #6b7280; text-transform: uppercase; }
+.fx-card .value { font-weight: 600; }
+.fx-card .value.unavailable { color: #9ca3af; font-weight: 400; font-style: italic; }
+.fx-timestamp { margin-left: auto; font-size: 0.75rem; color: #9ca3af; }
+.hint { color: #6b7280; font-size: 0.85rem; margin-bottom: 1rem; max-width: 640px; }
+.hint a { color: #2563eb; }
+.kpi-card.highlight { border: 2px solid #1f2937; }
+.month-slider-wrap {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 0.9rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.month-slider-row { display: flex; align-items: center; gap: 0.75rem; }
+.month-slider-endpoint { font-size: 0.75rem; color: #9ca3af; white-space: nowrap; }
+.month-range { flex: 1; accent-color: #2563eb; }
+.month-slider-current { text-align: center; font-weight: 600; margin-top: 0.5rem; color: #1f2937; }

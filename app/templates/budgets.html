@@ -2,9 +2,13 @@
 {% block title %}Budgets - Budget Tracker{% endblock %}
 {% block content %}
 <div class="period-nav">
-    <a href="/budgets?period={{ prev_period_str }}">&laquo; prev</a>
+    <a href="/budgets?period={{ prev_period_str }}&currency={{ currency }}">&laquo; prev</a>
     <strong>{{ period_str }}</strong>
-    <a href="/budgets?period={{ next_period_str }}">next &raquo;</a>
+    <a href="/budgets?period={{ next_period_str }}&currency={{ currency }}">next &raquo;</a>
+    <span class="currency-switch">
+        <a href="/budgets?period={{ period_str }}&currency=JPY" class="{{ 'active' if currency == 'JPY' }}">JPY</a>
+        <a href="/budgets?period={{ period_str }}&currency=IDR" class="{{ 'active' if currency == 'IDR' }}">IDR</a>
+    </span>
 </div>
 
 <table>

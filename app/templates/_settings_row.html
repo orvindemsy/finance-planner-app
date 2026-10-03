@@ -1,21 +1,16 @@
-<tr id="budget-row-{{ row.category.id }}">
+<tr id="settings-row-{{ row.category.id }}">
     <td>{{ row.category.name }}</td>
     <td><span class="badge {{ row.category.type.value }}">{{ row.category.type.value }}</span></td>
     <td>
         <form class="inline-form"
               style="margin:0"
-              hx-post="/budgets/{{ row.category.id }}"
-              hx-target="#budget-row-{{ row.category.id }}"
+              hx-post="/settings/{{ row.category.id }}"
+              hx-target="#settings-row-{{ row.category.id }}"
               hx-swap="outerHTML">
-            <input type="hidden" name="period" value="{{ period_str }}">
             <input type="hidden" name="currency" value="{{ currency }}">
             <input class="budget-amount-input" type="number" step="0.01" min="0"
                    name="planned_amount" value="{{ row.planned }}">
             <button type="submit">Save</button>
         </form>
-    </td>
-    <td>{{ row.actual|money }}</td>
-    <td class="{{ 'over-budget' if row.actual > row.planned and row.category.type.value in ('expense', 'savings') else 'under-budget' }}">
-        {{ (row.actual - row.planned)|money }}
     </td>
 </tr>

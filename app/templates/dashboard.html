@@ -1,52 +1,140 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Budget Tracker{% endblock %}
 {% block content %}
+<div class="kpi-row">
+    <div class="kpi-card highlight">
+        <div class="label">Total Net Worth ({{ currency }})</div>
+        <div class="value {{ 'positive' if net_worth >= 0 else 'negative' }}">{{ currency_symbol }}{{ net_worth|money }}</div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Total Income ({{ currency }})</div>
+        <div class="value positive">{{ currency_symbol }}{{ total_income|money }}</div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Total Spending ({{ currency }})</div>
+        <div class="value negative">{{ currency_symbol }}{{ total_expense|money }}</div>
+    </div>
+</div>
+<p class="hint">
+    All-time since your data began, for {{ currency }} only. Net worth is estimated as income minus
+    spending — money moved into Invest/Savings isn't counted as spending, so it still counts here even
+    though actual account balances aren't tracked.
+</p>
+
 <div class="period-nav">
-    <a href="/?period={{ prev_period_str }}">&laquo; prev</a>
+    <a href="/?period={{ prev_period_str }}&currency={{ currency }}">&laquo; prev</a>
     <strong>{{ period_str }}</strong>
-    <a href="/?period={{ next_period_str }}">next &raquo;</a>
+    <a href="/?period={{ next_period_str }}&currency={{ currency }}">next &raquo;</a>
+    <span class="currency-switch">
+        <span class="currency-switch-label">Currency:</span>
+        <a href="/?period={{ period_str }}&currency=JPY" class="{{ 'active' if currency == 'JPY' }}">JPY</a>
+        <a href="/?period={{ period_str }}&currency=IDR" class="{{ 'active' if currency == 'IDR' }}">IDR</a>
+    </span>
+</div>
+
+<div class="month-slider-wrap">
+    <div class="month-slider-row">
+        <span class="month-slider-endpoint">{{ available_months[0] }}</span>
+        <input type="range" id="month-range" class="month-range"
+               min="0" max="{{ available_months|length - 1 }}"
+               value="{{ current_month_index }}" step="1" list="month-ticks">
+        <span class="month-slider-endpoint">{{ available_months[-1] }}</span>
+    </div>
+    <datalist id="month-ticks">
+        {% for m in available_months %}<option value="{{ loop.index0 }}"></option>{% endfor %}
+    </datalist>
+    <div class="month-slider-current" id="month-slider-label">{{ period_str }}</div>
+</div>
+<script>
+(function () {
+    var months = [{% for m in available_months %}"{{ m }}"{% if not loop.last %},{% endif %}{% endfor %}];
+    var range = document.getElementById("month-range");
+    var label = document.getElementById("month-slider-label");
+    range.addEventListener("input", function () {
+        label.textContent = months[this.value];
+    });
+    range.addEventListener("change", function () {
+        var url = new URL(window.location);
+        url.searchParams.set("period", months[this.value]);
+        window.location = url;
+    });
+})();
+</script>
+
+<div class="fx-row">
+    <div class="fx-card">
+        <span class="label">USD/JPY</span>
+        {% if fx.jpy %}
+            <span class="value">¥{{ fx.jpy|money }}</span>
+        {% else %}
+            <span class="value unavailable">unavailable</span>
+        {% endif %}
+    </div>
+    <div class="fx-card">
+        <span class="label">USD/IDR</span>
+        {% if fx.idr %}
+            <span class="value">Rp{{ fx.idr|money }}</span>
+        {% else %}
+            <span class="value unavailable">unavailable</span>
+        {% endif %}
+    </div>
+    {% if fx.fetched_at %}
+        <span class="fx-timestamp">as of {{ fx.fetched_at }}</span>
+    {% endif %}
 </div>
 
 <div class="kpi-row">
     <div class="kpi-card">
-        <div class="label">Income</div>
-        <div class="value positive">{{ "%.2f"|format(income_total) }}</div>
+        <div class="label">Income ({{ currency }})</div>
+        <div class="value positive">{{ currency_symbol }}{{ income_total|money }}</div>
     </div>
     <div class="kpi-card">
-        <div class="label">Expense</div>
-        <div class="value negative">{{ "%.2f"|format(expense_total) }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="label">Net</div>
-        <div class="value {{ 'positive' if net >= 0 else 'negative' }}">{{ "%.2f"|format(net) }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="label">Planned vs Actual (Expense)</div>
-        <div class="value {{ 'negative' if expense_delta > 0 else 'positive' }}">
-            {{ "%.2f"|format(expense_delta) }}
-        </div>
+        <div class="label">Expense ({{ currency }})</div>
+        <div class="value negative">{{ currency_symbol }}{{ expense_total|money }}</div>
     </div>
 </div>
 
 <section>
-    <h2>Category Breakdown</h2>
+    <h2>Spending Breakdown</h2>
     <table>
         <thead>
-            <tr><th>Category</th><th>Type</th><th>Actual</th><th>Planned</th><th>Delta</th></tr>
+            <tr><th>Category</th><th>Budget</th><th>Actual</th><th>Delta</th></tr>
         </thead>
         <tbody>
-        {% for row in breakdown %}
+        {% for row in expense_breakdown %}
             <tr>
                 <td>{{ row.name }}</td>
-                <td><span class="badge {{ row.type }}">{{ row.type }}</span></td>
-                <td>{{ "%.2f"|format(row.actual) }}</td>
-                <td>{{ "%.2f"|format(row.planned) }}</td>
-                <td class="{{ 'over-budget' if row.actual > row.planned and row.type == 'expense' else 'under-budget' }}">
-                    {{ "%.2f"|format(row.actual - row.planned) }}
+                <td>{{ row.budget|money }}</td>
+                <td>{{ row.actual|money }}</td>
+                <td class="{{ 'over-budget' if row.actual > row.budget else 'under-budget' }}">
+                    {{ (row.actual - row.budget)|money }}
                 </td>
             </tr>
         {% else %}
-            <tr><td colspan="5">No categories yet. Add one on the Categories page.</td></tr>
+            <tr><td colspan="4">No expense categories yet. Add one on the Categories page.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Income Breakdown</h2>
+    <table>
+        <thead>
+            <tr><th>Category</th><th>Budget</th><th>Actual</th><th>Delta</th></tr>
+        </thead>
+        <tbody>
+        {% for row in income_breakdown %}
+            <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.budget|money }}</td>
+                <td>{{ row.actual|money }}</td>
+                <td class="{{ 'under-budget' if row.actual >= row.budget else 'over-budget' }}">
+                    {{ (row.actual - row.budget)|money }}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4">No income categories yet. Add one on the Categories page.</td></tr>
         {% endfor %}
         </tbody>
     </table>
@@ -56,18 +144,21 @@
     <h2>Recent Transactions</h2>
     <table>
         <thead>
-            <tr><th>Date</th><th>Category</th><th>Amount</th><th>Description</th></tr>
+            <tr><th>Date</th><th>Category</th><th>Account</th><th>Amount</th><th>Description</th></tr>
         </thead>
         <tbody>
         {% for tx in recent_transactions %}
             <tr>
                 <td>{{ tx.date }}</td>
                 <td>{{ tx.category.name }}</td>
-                <td>{{ "%.2f"|format(tx.amount) }}</td>
+                <td>{{ tx.account.name }}</td>
+                <td class="{{ 'positive' if tx.direction.value == 'inflow' else 'negative' }}">
+                    {{ '+' if tx.direction.value == 'inflow' else '-' }}{{ tx.amount|money }}
+                </td>
                 <td>{{ tx.description or "" }}</td>
             </tr>
         {% else %}
-            <tr><td colspan="4">No transactions yet.</td></tr>
+            <tr><td colspan="5">No transactions yet.</td></tr>
         {% endfor %}
         </tbody>
     </table>

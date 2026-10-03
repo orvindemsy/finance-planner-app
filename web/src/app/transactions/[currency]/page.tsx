@@ -79,11 +79,15 @@ export default async function TransactionsPage({
   const month = String(period.getUTCMonth() + 1).padStart(2, "0");
   const basePath = `/transactions/${currencySlug}`;
 
+  // Default the "+ Add Transaction" date to today when viewing the current
+  // month; otherwise default to the last day of whichever month is selected
+  // (e.g. adding a transaction while browsing September defaults to Sept 30).
   const today = new Date();
   const isCurrentPeriod = year === String(today.getFullYear()) && month === String(today.getMonth() + 1).padStart(2, "0");
+  const lastDayOfSelectedMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
   const defaultDate = isCurrentPeriod
     ? `${year}-${month}-${String(today.getDate()).padStart(2, "0")}`
-    : `${year}-${month}-01`;
+    : `${year}-${month}-${String(lastDayOfSelectedMonth).padStart(2, "0")}`;
 
   const categoryCookie = `${CATEGORY_FILTER_COOKIE}-${currencySlug}`;
   const accountCookie = `${ACCOUNT_FILTER_COOKIE}-${currencySlug}`;
